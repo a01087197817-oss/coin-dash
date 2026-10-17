@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101827">
+<meta name="description" content="COIN DASH - 모으고, 피하고, 강해져라!">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>COIN DASH</title>
+<style>
+  :root { color-scheme: dark; --bg:#101827; --panel:#182438; --line:#31445f; --text:#edf5ff; --muted:#9eb1ca; --blue:#3c8cff; --gold:#ffd34e; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:radial-gradient(ellipse at top,#203656 0%,#101827 58%); color:var(--text); font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif; display:flex; justify-content:center; padding:18px; }
+  .app { width:min(100%,980px); }
+  header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  h1 { margin:0; font-size:clamp(24px,4vw,36px); letter-spacing:2px; } h1 span { color:var(--gold); }
+  .subtitle { color:var(--muted); font-size:13px; margin-top:3px; }
+  .hud { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { background:#182438; border:1px solid var(--line); padding:8px 12px; border-radius:12px; font-weight:700; font-size:14px; }
+  .game-wrap { position:relative; border:1px solid #405775; border-radius:16px; overflow:hidden; background:#0b1422; box-shadow:0 18px 55px #0006; }
+  canvas { display:block; width:100%; height:auto; aspect-ratio:16/9; touch-action:none; }
+  .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:16px; background:#07101dcc; }
+  .overlay.hidden { display:none; }
+  .dialog { width:min(100%,510px); background:#182438; border:1px solid #476181; border-radius:18px; padding:22px; text-align:center; box-shadow:0 12px 35px #0008; }
+  .dialog h2 { margin:0 0 8px; font-size:25px; } .dialog p { color:#c2d2e8; line-height:1.55; margin:8px 0 16px; }
+  button { border:0; border-radius:11px; padding:11px 15px; background:var(--blue); color:white; font-weight:800; cursor:pointer; font-size:14px; }
+  button:hover { filter:brightness(1.12); } button:disabled { opacity:.4; cursor:not-allowed; }
+  .secondary { background:#30445f; } .shop-items { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:14px 0; text-align:left; }
+  .item { background:#101a2b; border:1px solid #344967; border-radius:12px; padding:12px; min-width:0; }
+  .item strong { display:block; margin-bottom:5px; } .item p { margin:0 0 10px; font-size:12px; min-height:56px; }
+  @media(min-width:641px) and (max-width:850px) { .shop-items{grid-template-columns:repeat(2,1fr)} }
+  .item button { width:100%; padding:9px 7px; }
+  .controls { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-top:12px; flex-wrap:wrap; }
+  .help { color:var(--muted); font-size:13px; line-height:1.6; }
+  .health-pill { display:flex; align-items:center; gap:8px; min-width:170px; }
+  .health-track { flex:1; height:10px; min-width:55px; background:#3b2536; border-radius:99px; overflow:hidden; border:1px solid #674253; }
+  .health-fill { width:100%; height:100%; background:linear-gradient(90deg,#45df91,#9cf27a); transition:width .12s; }
+  .mobile-controls { display:none; gap:8px; }
+  .mobile-controls button { min-width:54px; min-height:48px; background:#263b57; font-size:17px; }
+  @media(max-width:640px) { body{padding:10px} .shop-items{grid-template-columns:1fr} .item{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center} .item p{min-height:0;margin:0}.item button{width:auto} .mobile-controls{display:flex} .dialog{padding:15px} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div><h1>COIN <span>DASH</span></h1><div class="subtitle">모으고 · 피하고 · 강해져라</div></div>
+    <div class="hud">
+      <div class="pill">스테이지 <span id="stageLabel">1</span></div>
+      <div class="pill">🪙 <span id="coinLabel">0</span></div>
+      <div class="pill health-pill"><span>HP</span><div class="health-track"><div id="healthFill" class="health-fill"></div></div><span id="hpLabel">100/100</span></div>
+    </div>
+  </header>
+  <div class="game-wrap">
+    <canvas id="game" width="960" height="540" aria-label="Coin Dash game"></canvas>
+    <div class="overlay" id="startOverlay">
+      <div class="dialog">
+        <h2>🟦 COIN DASH</h2>
+        <p>파란 네모가 되어 동전 적들을 물리치고 코인을 모으세요!<br>3스테이지를 클리어할 때마다 상점이 열립니다.<br>체력은 100부터 시작하며, 능력은 상점에서 구매해야 사용할 수 있어요.</p>
+        <p><b>이동</b> A/D 또는 ←/→ · <b>점프</b> W/↑/Space<br><b>대쉬</b> Shift (빠른 대쉬 구매 후) · <b>공격</b> 마우스 클릭 또는 J</p>
+        <button id="startBtn">게임 시작</button>
+      </div>
+    </div>
+    <div class="overlay hidden" id="shopOverlay">
+      <div class="dialog">
+        <h2>🏪 스테이지 상점</h2>
+        <p>모은 코인으로 능력을 구매하세요. 구매한 능력은 이후에도 유지됩니다.</p>
+        <div class="shop-items">
+          <div class="item"><div><strong>⚡ 빠른 대쉬</strong><p>대쉬 속도와 재사용 대기시간 개선</p></div><button data-buy="dash">🪙 8 구매</button></div>
+          <div class="item"><div><strong>🎯 스나이퍼</strong><p>탄환이 적을 관통하며 맞은 적을 즉시 처치</p></div><button data-buy="sniper">🪙 10 구매</button></div>
+          <div class="item"><div><strong>⬆ 강화 점프</strong><p>더 높이 점프할 수 있음</p></div><button data-buy="jump">🪙 8 구매</button></div>
+          <div class="item"><div><strong>💚 흡혈</strong><p>공격이 적에게 적중할 때마다 체력 1 회복 (최대 100)</p></div><button data-buy="lifesteal">🪙 8 구매</button></div>
+        </div>
+        <button id="continueBtn">다음 스테이지로 ▶</button>
+        <div id="shopMessage" class="help" style="margin-top:10px"></div>
+      </div>
+    </div>
+    <div class="overlay hidden" id="endOverlay">
+      <div class="dialog">
+        <h2 id="endTitle">게임 종료</h2><p id="endText"></p>
+        <button id="restartBtn">다시 시작</button>
+      </div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="help">이동: A/D 또는 ←/→ · 점프: W/↑/Space · 대쉬: Shift · 공격: 클릭/J<br>동전 적을 쓰러뜨리면 코인을 얻어요. 적의 몸에 닿으면 피해를 받아요.</div>
+    <div class="mobile-controls">
+      <button id="leftBtn">◀</button><button id="jumpBtn">점프 ⤴</button><button id="attackBtn">공격</button><button id="dashBtn">대쉬 »</button><button id="rightBtn">▶</button>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height, floorY = 470;
+  const $ = id => document.getElementById(id);
+  const keys = new Set();
+  let state = 'start', stage = 1, coins = 0, hp = 100, frame = 0, lastShot = 0;
+  let enemies = [], shots = [], enemyShots = [], particles = [], platforms = [];
+  let shopEvery = 3, stageKills = 0, targetKills = 5, spawnTimer = 0, spawnedThisStage = 0;
+  const maxHp = 100, maxActiveEnemies = 3;
+  let abilities = {dash:0, sniper:0, jump:0, lifesteal:0};
+  let player, held = {left:false,right:false,jump:false};
+  const abilityNames = {dash:'빠른 대쉬', sniper:'스나이퍼', jump:'강화 점프', lifesteal:'흡혈'};
+  const rand = (a,b) => a + Math.random()*(b-a);
+  function resetPlayer() { player = {x:90,y:floorY-36,w:30,h:36,vx:0,vy:0,face:1,onGround:true,dashTime:0,dashCd:0,dashDir:1,invuln:0,attackCd:0}; }
+  function updateHud() {
+    $('stageLabel').textContent=stage;
+    $('coinLabel').textContent=coins;
+    $('hpLabel').textContent=`${Math.max(0,Math.ceil(hp))}/${maxHp}`;
+    $('healthFill').style.width=`${Math.max(0,Math.min(100,hp))}%`;
+    $('healthFill').style.background = hp <= 25 ? 'linear-gradient(90deg,#ff526d,#ff9a7a)' : hp <= 50 ? 'linear-gradient(90deg,#ffb84d,#ffe16b)' : 'linear-gradient(90deg,#45df91,#9cf27a)';
+  }
+  function makeStage() {
+    enemies=[]; shots=[]; enemyShots=[]; particles=[]; stageKills=0; spawnedThisStage=0;
+    targetKills=4 + Math.min(stage,5);
+    spawnTimer=90;
+    platforms = [
+      {x:260,y:390,w:130,h:16},{x:480,y:325,w:140,h:16},{x:710,y:390,w:120,h:16}
+    ];
+    spawnEnemy(); spawnedThisStage++;
+    resetPlayer(); updateHud();
+  }
+  function spawnEnemy() {
+    const side = Math.random()<.5 ? 0 : W-34;
+    const hpValue = 1 + Math.floor((stage-1)/3);
+    enemies.push({x:side,y:floorY-30,r:16,hp:hpValue,maxHp:hpValue,vx:rand(-0.6,0.6),vy:0,shootCd:rand(210,300),phase:rand(0,6),alive:true});
+  }
+  function startGame() { stage=1;coins=0;hp=maxHp;abilities={dash:0,sniper:0,jump:0,lifesteal:0};state='play';$('startOverlay').classList.add('hidden');$('endOverlay').classList.add('hidden');makeStage(); }
+  function endGame(win) { state='end'; $('endTitle').textContent=win?'🎉 完成！':'💥 遊戲結束'; $('endText').textContent=win?`你成功通過第 ${stage} 關！`:`你到達了第 ${stage} 關，總共收集 ${coins} 枚硬幣。`; $('endOverlay').classList.remove('hidden'); }
+  function openShop() { state='shop'; $('shopMessage').textContent='현재 코인: '+coins+'개'; $('shopOverlay').classList.remove('hidden'); refreshShop(); }
+  function refreshShop() {
+    document.querySelectorAll('[data-buy]').forEach(btn=>{
+      const type=btn.dataset.buy, level=abilities[type], cost=type==='sniper'?10:8;
+      btn.textContent=level ? `보유 Lv.${level} · 🪙 ${cost}` : `🪙 ${cost} 구매`;
+      btn.disabled=coins<cost || level>=3;
+    });
+    $('shopMessage').textContent='현재 코인: '+coins+'개 · 능력은 최대 3레벨까지 강화할 수 있어요.';
+  }
+  function buy(type) {
+    const cost=type==='sniper'?10:8;
+    if(coins<cost){$('shopMessage').textContent='코인이 부족해요! 적을 더 잡아 보세요.';return;}
+    if(abilities[type]>=3){$('shopMessage').textContent='이 능력은 이미 최대 레벨이에요!';return;}
+    coins-=cost;abilities[type]++;updateHud();refreshShop();
+    $('shopMessage').textContent=`${abilityNames[type]} Lv.${abilities[type]} 구매 완료!`;
+  }
+  document.querySelectorAll('[data-buy]').forEach(btn=>btn.addEventListener('click',()=>buy(btn.dataset.buy)));
+  $('startBtn').addEventListener('click',startGame);
+  $('restartBtn').addEventListener('click',startGame);
+  $('continueBtn').addEventListener('click',()=>{$('shopOverlay').classList.add('hidden');stage++;state='play';makeStage();});
+  function burst(x,y,color,n=8){for(let i=0;i<n;i++)particles.push({x,y,vx:rand(-3,3),vy:rand(-4,1),life:rand(15,30),color});}
+  function shoot() {
+    if(state!=='play'||player.attackCd>0)return;
+    player.attackCd=Math.max(8,20-abilities.sniper*3);
+    const speed=abilities.sniper?12:8;
+    shots.push({x:player.x+player.w/2+player.face*18,y:player.y+player.h/2,vx:player.face*speed,vy:0,r:abilities.sniper?5:4,damage:abilities.sniper?999:1,life:abilities.sniper?140:90,piercing:abilities.sniper>0,hitIds:[]});
+  }
+  function dash() {
+    if(state!=='play')return;
+    if(abilities.dash<=0){$('shopMessage').textContent='빠른 대쉬는 상점에서 구매해야 사용할 수 있어요.';return;}
+    if(player.dashCd>0)return;
+    player.dashTime=12+abilities.dash*2;
+    player.dashDir=player.face;
+    player.dashCd=Math.max(25,60-abilities.dash*10);
+    player.invuln=Math.max(player.invuln,player.dashTime);
+  }
+  function jump() { if(state!=='play')return; if(player.onGround){player.vy=abilities.jump?-13-abilities.jump*2:-11;player.onGround=false;} }
+  window.addEventListener('keydown',e=>{
+    if(['ArrowLeft','ArrowRight','ArrowUp',' '].includes(e.key))e.preventDefault();
+    keys.add(e.key.toLowerCase());
+    if(e.repeat)return;
+    if([' ','w','arrowup'].includes(e.key.toLowerCase()))jump();
+    if(e.key.toLowerCase()==='shift')dash();
+    if(e.key.toLowerCase()==='j')shoot();
+    if(state==='start'&&e.key==='Enter')startGame();
+  });
+  window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+  canvas.addEventListener('pointerdown',e=>{
+    if(state!=='play')return;
+    const rect=canvas.getBoundingClientRect(), x=(e.clientX-rect.left)*W/rect.width;
+    player.face=x>player.x+player.w/2?1:-1;shoot();
+  });
+  function bindHold(id, prop) {
+    const el=$(id);
+    const down=e=>{e.preventDefault();held[prop]=true;if(prop==='jump')jump();if(prop==='dash')dash();if(prop==='attack')shoot();};
+    const up=e=>{e.preventDefault();held[prop]=false;};
+    el.addEventListener('pointerdown',down);el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);el.addEventListener('pointerleave',up);
+  }
+  bindHold('leftBtn','left');bindHold('rightBtn','right');bindHold('jumpBtn','jump');bindHold('dashBtn','dash');bindHold('attackBtn','attack');
+  function hurt(damage = 2 + (stage - 1)) {
+    if(player.invuln>0)return;
+    hp=Math.max(0,hp-damage);
+    player.invuln=55;
+    burst(player.x+15,player.y+15,'#ff647c',12);
+    updateHud();
+    if(hp<=0)endGame(false);
+  }
+  function update() {
+    frame++;
+    if(state!=='play')return;
+    const left=keys.has('a')||keys.has('arrowleft')||held.left;
+    const right=keys.has('d')||keys.has('arrowright')||held.right;
+    if(player.dashTime>0){
+      player.face=player.dashDir;
+      player.vx=player.dashDir*(10+Math.max(0,abilities.dash-1)*0.8);
+      player.dashTime--;
+    } else {
+      if(left){player.vx=-3.4;player.face=-1;} else if(right){player.vx=3.4;player.face=1;} else player.vx*=.78;
+    }
+    if(player.dashCd>0)player.dashCd--;if(player.invuln>0)player.invuln--;if(player.attackCd>0)player.attackCd--;
+    player.x+=player.vx;player.x=Math.max(0,Math.min(W-player.w,player.x));
+    player.vy+=.58;player.y+=player.vy;player.onGround=false;
+    if(player.y+player.h>=floorY){player.y=floorY-player.h;player.vy=0;player.onGround=true;}
+    for(const p of platforms) {
+      if(player.vy>=0&&player.x+player.w>p.x&&player.x<p.x+p.w&&player.y+player.h>=p.y&&player.y+player.h-player.vy<=p.y){player.y=p.y-player.h;player.vy=0;player.onGround=true;}
+    }
+    for(const s of shots){s.x+=s.vx;s.y+=s.vy;s.life--;}
+    shots=shots.filter(s=>s.life>0&&s.x>-20&&s.x<W+20);
+    for(const e of enemies) {
+      if(!e.alive)continue;
+      const dx=(player.x+player.w/2)-(e.x+e.r), dy=(player.y+player.h/2)-(e.y+e.r);
+      if(Math.abs(dx)>25)e.vx+=Math.sign(dx)*.035;
+      e.vx=Math.max(-1.5-Math.min(stage*.05,.8),Math.min(1.5+Math.min(stage*.05,.8),e.vx));
+      e.x+=e.vx;e.x=Math.max(0,Math.min(W-e.r*2,e.x));
+      e.phase+=.07;e.y=floorY-e.r*2+Math.sin(e.phase)*3;
+      e.shootCd--;
+      if(e.shootCd<=0&&stage>=2){
+        const len=Math.hypot(dx,dy)||1;
+        enemyShots.push({x:e.x+e.r,y:e.y+e.r,vx:dx/len*2.5,vy:dy/len*2.5,r:5,damage:2+(stage-1)});
+        e.shootCd=rand(240,330)-Math.min(stage*5,70);
+      }
+      if(player.x<e.x+e.r*2&&player.x+player.w>e.x&&player.y<e.y+e.r*2&&player.y+player.h>e.y) {if(player.dashTime>0){if(!e.dashHit){e.hp-=1;e.dashHit=true;}}else hurt();} else {e.dashHit=false;}
+      for(const s of shots){
+        if(s.life<=0 || s.hitIds.includes(e) || s.x<=e.x || s.x>=e.x+e.r*2 || s.y<=e.y || s.y>=e.y+e.r*2) continue;
+        s.hitIds.push(e);
+        e.hp-=s.damage;
+        if(abilities.lifesteal>0 && hp<maxHp){hp=Math.min(maxHp,hp+1);updateHud();}
+        burst(s.x,s.y,'#ffd34e',4);
+        if(!s.piercing)s.life=0;
+      }
+      if(e.hp<=0){e.alive=false;coins+=1+Math.floor(stage/4);stageKills++;burst(e.x+e.r,e.y+e.r,'#ffd34e',12);updateHud();}
+    }
+    enemies=enemies.filter(e=>e.alive);
+    for(const s of enemyShots){s.x+=s.vx;s.y+=s.vy;if(Math.abs(s.x-(player.x+15))<18&&Math.abs(s.y-(player.y+18))<22){hurt(s.damage || (2 + stage - 1));s.x=-100;}}
+    enemyShots=enemyShots.filter(s=>s.x>-20&&s.x<W+20&&s.y>-20&&s.y<H+20);
+    for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.12;p.life--;}
+    particles=particles.filter(p=>p.life>0);
+    if(spawnedThisStage<targetKills) {
+      spawnTimer--;
+      if(spawnTimer<=0 && enemies.length<maxActiveEnemies) {
+        spawnEnemy();
+        spawnedThisStage++;
+        spawnTimer=Math.max(75,170-stage*7);
+      }
+    }
+    if(enemies.length===0&&stageKills>=targetKills&&spawnedThisStage>=targetKills) {
+      if(stage>=9)endGame(true);
+      else if(stage%shopEvery===0)openShop();
+      else {stage++;makeStage();}
+    }
+    updateHud();
+  }
+  function drawCoin(x,y,r,enemy=false,hpNow=1,hpMax=1) {
+    ctx.save();ctx.translate(x+r,y+r);
+    ctx.fillStyle=enemy?'#ff5d72':'#ffd34e';ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();
+    ctx.lineWidth=3;ctx.strokeStyle=enemy?'#a92749':'#b77b16';ctx.stroke();
+    ctx.fillStyle=enemy?'#68162b':'#99600a';ctx.font=`bold ${r}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(enemy?'!':'$',0,1);
+    if(enemy&&hpMax>1){ctx.fillStyle='#222';ctx.fillRect(-r,y*0+r*2+4,r*2,4);ctx.fillStyle='#ff5d72';ctx.fillRect(-r,y*0+r*2+4,r*2*hpNow/hpMax,4);}
+    ctx.restore();
+  }
+  function draw() {
+    ctx.clearRect(0,0,W,H);
+    const sky=ctx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#142844');sky.addColorStop(1,'#0a1422');ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#203957';for(let i=0;i<12;i++){const x=i*95-(frame*.25%95);ctx.fillRect(x,90+(i%3)*26,45,2);}
+    ctx.fillStyle='#263c59';ctx.fillRect(0,floorY,W,H-floorY);ctx.fillStyle='#456584';ctx.fillRect(0,floorY,W,5);
+    for(const p of platforms){ctx.fillStyle='#375373';ctx.fillRect(p.x,p.y,p.w,p.h);ctx.fillStyle='#6d8ba8';ctx.fillRect(p.x,p.y,p.w,4);}
+    // player
+    if(player){
+      ctx.save();if(player.invuln>0&&Math.floor(frame/5)%2===0)ctx.globalAlpha=.45;
+      ctx.fillStyle='#3c8cff';ctx.fillRect(player.x,player.y,player.w,player.h);
+      ctx.fillStyle='#dcecff';ctx.fillRect(player.x+(player.face===1?18:5),player.y+9,7,7);
+      ctx.fillStyle='#0d2546';ctx.fillRect(player.x+(player.face===1?21:7),player.y+11,3,3);
+      if(player.dashTime>0){ctx.globalAlpha=.3;ctx.fillStyle='#71c9ff';ctx.fillRect(player.x-player.face*18,player.y+5,player.w,player.h-10);}
+      ctx.restore();
+    }
+    for(const e of enemies)if(e.alive)drawCoin(e.x,e.y,e.r,true,e.hp,e.maxHp);
+    for(const s of shots){ctx.fillStyle=abilities.sniper?'#9de8ff':'#fff2a1';ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();}
+    for(const s of enemyShots){ctx.fillStyle='#ff6c8b';ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();}
+    for(const p of particles){ctx.globalAlpha=Math.max(0,p.life/30);ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,4,4);}ctx.globalAlpha=1;
+    ctx.fillStyle='#d8e8ff';ctx.font='bold 15px system-ui';ctx.textAlign='left';ctx.fillText(`KOs ${stageKills}/${targetKills}`,18,28);
+    ctx.fillStyle='#8fa8c7';ctx.font='12px system-ui';ctx.fillText(`DASH ${abilities.dash?(player&&player.dashCd>0?'재충전 중':'READY'):'LOCKED'}  ·  공격: ${abilities.sniper?'SNIPER (관통·즉사)':'기본 공격'}`,18,48);
+    if(state==='shop'){/* shop overlay handles pause */}
+    if(abilities.lifesteal>0){ctx.fillStyle='#8cf0b2';ctx.font='12px system-ui';ctx.textAlign='right';ctx.fillText('LIFESTEAL Lv.'+abilities.lifesteal,W-18,28);}
+  }
+  function loop(){try{update();draw();}catch(err){ctx.fillStyle='#ffdddd';ctx.font='18px system-ui';ctx.fillText('오류가 발생했어요: '+err.message,20,70);console.error(err);}requestAnimationFrame(loop);}
+  makeStage();hp=maxHp;updateHud();state='start';loop();
+  if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1')) { window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('Service worker registration failed:',err))); }
+})();
+</script>
+</body>
+</html>
